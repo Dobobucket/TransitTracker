@@ -2,9 +2,7 @@ import sys
 import requests
 from datetime import datetime
 from collections import defaultdict
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QTableWidget,
-    QTableWidgetItem, QLabel, QHeaderView
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel, QHeaderView
 )
 from PyQt6.QtCore import QTimer
 
@@ -25,7 +23,7 @@ class TransitApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Live Departures")
-        self.setGeometry(200, 200, 700, 500)
+        self.setGeometry(200, 200, 900, 500)
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
@@ -39,8 +37,8 @@ class TransitApp(QWidget):
             self.layout.addWidget(label)
 
             table = QTableWidget()
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels(["Mode", "Route", "From → To", "ETA", "Status"])
+            table.setColumnCount(6)
+            table.setHorizontalHeaderLabels(["Mode", "Route", "From → To", "ETA", "Status", "Expected (Scheduled)"])
             table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
             table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
             self.layout.addWidget(table)
@@ -107,11 +105,23 @@ class TransitApp(QWidget):
                 eta = "Due" if mins == 0 else f"{mins} min"
                 from_to = f"{dep.get('stop_id', '')} → {dep['trip_headsign']}"
 
+                expected = dep["departure"].get("expected")
+                aimed = dep["departure"].get("aimed")
+
+                # show only HH:MM
+                expected_time = datetime.fromisoformat(expected).strftime("%H:%M") if expected else "--"
+                aimed_time = datetime.fromisoformat(aimed).strftime("%H:%M") if aimed else "--"
+
+                time_display = f"{expected_time} ({aimed_time})"
+
+
                 table.setItem(row, 0, QTableWidgetItem(mode))
                 table.setItem(row, 1, QTableWidgetItem(route))
                 table.setItem(row, 2, QTableWidgetItem(from_to))
                 table.setItem(row, 3, QTableWidgetItem(eta))
                 table.setItem(row, 4, QTableWidgetItem(status))
+                table.setItem(row, 5, QTableWidgetItem(time_display))
+
 
 
 if __name__ == "__main__":
