@@ -3,7 +3,8 @@ import requests
 from datetime import datetime
 from collections import defaultdict
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QLabel, QScrollArea
+    QApplication, QWidget, QVBoxLayout, QTableWidget,
+    QTableWidgetItem, QLabel, QHeaderView
 )
 from PyQt6.QtCore import QTimer
 
@@ -24,19 +25,27 @@ class TransitApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Live Departures")
-        self.setGeometry(200, 200, 550, 600)
+        self.setGeometry(200, 200, 700, 500)
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        # Scroll area for all departures
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll_content = QWidget()
-        self.scroll_layout = QVBoxLayout()
-        self.scroll_content.setLayout(self.scroll_layout)
-        self.scroll.setWidget(self.scroll_content)
-        self.layout.addWidget(self.scroll)
+        self.tables = {}  # dictionary to hold tables per heading
+
+        # Create a table for each destination group
+        for heading in DEST_GROUPS.keys():
+            label = QLabel(f"=== {heading} ===")
+            label.setStyleSheet("font-weight: bold; font-size: 16px; margin-top: 10px;")
+            self.layout.addWidget(label)
+
+            table = QTableWidget()
+            table.setColumnCount(5)
+            table.setHorizontalHeaderLabels(["Mode", "Route", "From → To", "ETA", "Status"])
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            self.layout.addWidget(table)
+
+            self.tables[heading] = table
 
         # Timer to refresh departures
         self.timer = QTimer()
@@ -60,12 +69,6 @@ class TransitApp(QWidget):
         return max(0, int(diff))
 
     def update_departures(self):
-        # Clear previous
-        for i in reversed(range(self.scroll_layout.count())):
-            widget = self.scroll_layout.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
-
         all_departures = []
 
         # Fetch departures from all stops
@@ -80,8 +83,7 @@ class TransitApp(QWidget):
                     if mins is not None and mins >= 0:
                         all_departures.append((mins, dep))
             except Exception as e:
-                error_label = QLabel(f"Error fetching stop {stop_id}: {e}")
-                self.scroll_layout.addWidget(error_label)
+                print(f"Error fetching stop {stop_id}: {e}")
 
         # Group departures by destination heading
         grouped = defaultdict(list)
@@ -92,29 +94,24 @@ class TransitApp(QWidget):
                     grouped[heading].append((mins, dep))
                     break
 
-        # Display each group
-        for heading, departures in grouped.items():
-            if not departures:
-                continue
-
-            heading_label = QLabel(f"=== {heading} ===")
-            heading_label.setStyleSheet("font-weight: bold; font-size: 16px; margin-top: 10px;")
-            self.scroll_layout.addWidget(heading_label)
-
-            # Sort by soonest departure
+        # Fill tables
+        for heading, table in self.tables.items():
+            departures = grouped.get(heading, [])
             departures.sort(key=lambda x: x[0])
+            table.setRowCount(min(len(departures), MAX_PER_DEST))
 
-            for mins, dep in departures[:MAX_PER_DEST]:
+            for row, (mins, dep) in enumerate(departures[:MAX_PER_DEST]):
                 route = dep["service_id"]
                 status = dep.get("status") or "scheduled"
                 mode = "TRAIN" if route in TRAIN_LINES else "BUS"
                 eta = "Due" if mins == 0 else f"{mins} min"
-                dep_label = QLabel(f"[{mode}] {route:>6} → {dep['trip_headsign']:<20} {eta:>6} [{status}]")
-                dep_label.setStyleSheet("margin-left: 15px;")
-                self.scroll_layout.addWidget(dep_label)
+                from_to = f"{dep.get('stop_id', '')} → {dep['trip_headsign']}"
 
-        # Add stretch so layout doesn't shrink
-        self.scroll_layout.addStretch()
+                table.setItem(row, 0, QTableWidgetItem(mode))
+                table.setItem(row, 1, QTableWidgetItem(route))
+                table.setItem(row, 2, QTableWidgetItem(from_to))
+                table.setItem(row, 3, QTableWidgetItem(eta))
+                table.setItem(row, 4, QTableWidgetItem(status))
 
 
 if __name__ == "__main__":
